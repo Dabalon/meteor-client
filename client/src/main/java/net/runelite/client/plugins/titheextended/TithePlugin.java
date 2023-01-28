@@ -25,7 +25,7 @@ public class TithePlugin extends Plugin {
 	private final Set<Integer> REGIONS = ImmutableSet.of(6966, 6967, 7222, 7223);
 	private boolean in_tithe_farm;
 
-	private TitheConfig config = (TitheConfig) javaConfiguration(TitheConfig.class);
+	private TitheConfig config = configuration(TitheConfig.class);
 	private Client client = Main.client;
 	private ClientThread client_thread = ClientThread.INSTANCE;
 	private OverlayManager overlays = OverlayManager.INSTANCE;
@@ -71,7 +71,8 @@ public class TithePlugin extends Plugin {
 		overlays.remove(overlay_points);
 		overlays.remove(overlay_patches);
 		overlays.remove(overlay_inventory);
-		client_thread.invokeLater(() -> overlay_points.shutDown());
+		if (overlay_points != null)
+			client_thread.invokeLater(() -> overlay_points.shutDown());
 	}
 
 	@Override
