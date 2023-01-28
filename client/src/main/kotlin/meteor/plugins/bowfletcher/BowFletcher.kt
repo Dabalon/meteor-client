@@ -1,6 +1,7 @@
 package meteor.plugins.bowfletcher
 
 import dev.hoot.api.input.Keyboard
+import dev.hoot.api.items.Bank
 import dev.hoot.api.widgets.Dialog
 import dev.hoot.api.widgets.Widgets
 import eventbus.events.GameTick
@@ -22,42 +23,59 @@ class BowFletcher : Plugin()   {
     var tickTimer = 0
 
     override fun onGameTick(it: GameTick) {
+        when {
+            config.type() == FletchingType.Cut_Logs -> handleCuttingLogs()
+            config.type() == FletchingType.String_Bow -> handleStringingBows()
+        }
+    }
 
-        val logs = Items.getCount(config.longbows().logID)
+    private fun handleCuttingLogs() {
+        val logs = Items.getCount(config.bows().logID)
         val knife = Items.getCount(ItemID.KNIFE)
-        val bows = Items.getCount(config.longbows().bowID)
-        val finishedBows = Items.getCount(config.longbows().finishedBowID)
-        val bowstring = Items.getCount(ItemID.BOW_STRING)
-
+        val shortbows = Items.getCount(config.bows().shortbowID)
+        val longbows = Items.getCount(config.bows().longbowID)
         return when {
-                client.gameState != GameState.LOGGED_IN -> {
-            }
-                tickTimer > 0 -> {
+            logs == 0 && !bankOpen() -> useBank()
+            knife == 0 && bankOpen() -> withdrawKnife()
+            config.style() == BowFletcherConfig.BowStyle.Longbow && logs == 0 && longbows == 0 && knife == 1 && bankOpen() && !Dialog.isEnterInputOpen() -> withdrawLogs()
+            config.style() == BowFletcherConfig.BowStyle.Shortbow && logs == 0 && shortbows == 0 && knife == 1 && bankOpen() && !Dialog.isEnterInputOpen() -> withdrawLogs()
+            Dialog.isEnterInputOpen() -> Keyboard.type("27", true)
+            logs > 1 && knife == 1 && bankOpen() -> closeBank()
+            logs > 1 && !bankOpen() && Widgets.get(270, 13) == null && client.localPlayer?.isIdle == true -> fletchLog()
+            config.style() == BowFletcherConfig.BowStyle.Longbow && Widgets.get(270, 13) != null -> Keyboard.type(3)
+            config.style() == BowFletcherConfig.BowStyle.Shortbow && Widgets.get(270, 13) != null -> Keyboard.type(2)
+            Dialog.canLevelUpContinue() -> fletchLog()
+            config.style() == BowFletcherConfig.BowStyle.Longbow && longbows > 1 && bankOpen() -> depositBows()
+            config.style() == BowFletcherConfig.BowStyle.Shortbow && shortbows > 1 && bankOpen() -> depositBows()
+            else -> return
+        }
+    }
+
+    private fun handleStringingBows() {
+        val shortbows = Items.getCount(config.bows().shortbowID)
+        val longbows = Items.getCount(config.bows().longbowID)
+        val finishedShortbows = Items.getCount(config.bows().finishedShortbowID)
+        val finishedLongbows = Items.getCount(config.bows().finishedLongbowID)
+        val bowstring = Items.getCount(ItemID.BOW_STRING)
+        return when {
+            tickTimer > 0 -> {
                 tickTimer--
                 return
             }
-            config.type() == FletchingType.Cut_Logs && logs == 0 && !bankOpen() -> useBank()
-            config.type() == FletchingType.Cut_Logs && knife == 0 && bankOpen() -> withdrawKnife()
-            config.type() == FletchingType.Cut_Logs && logs == 0 && bows == 0 && knife == 1 && bankOpen() && !Dialog.isEnterInputOpen()->
-                withdrawLogs()
-            config.type() == FletchingType.Cut_Logs && Dialog.isEnterInputOpen() -> Keyboard.type("27", true)
-            config.type() == FletchingType.Cut_Logs && logs > 1 && knife == 1 && bankOpen() -> closeBank()
-            config.type() == FletchingType.Cut_Logs && logs > 1 && !bankOpen() && Widgets.get(270, 13) == null && client.localPlayer?.isIdle == true -> fletchLog()
-            config.type() == FletchingType.Cut_Logs && Widgets.get(270, 13) != null -> Keyboard.type(3)
-            config.type() == FletchingType.Cut_Logs && Dialog.canLevelUpContinue() -> fletchLog()
-            config.type() == FletchingType.Cut_Logs && bows > 1 && bankOpen() -> depositBows()
-            config.type() == FletchingType.String_Bow && bowstring == 0 && !bankOpen() -> useBank()
-            config.type() == FletchingType.String_Bow && finishedBows == 0 && bows == 0 && bankOpen() && !Dialog.isEnterInputOpen() -> {
-                withdrawBows().also { withdrawBowstring()}
-            }
-            config.type() == FletchingType.String_Bow && Dialog.isEnterInputOpen() -> Keyboard.type("14", true)
-            config.type() == FletchingType.String_Bow && bowstring > 1 && bows > 1 && bankOpen() -> closeBank()
-            config.type() == FletchingType.String_Bow && Dialog.canLevelUpContinue() -> stringBow()
-            config.type() == FletchingType.String_Bow && bows == 14 && !bankOpen() && bowstring == 14 ->
-                stringBow().also { tickTimer = 3 }
-            config.type() == FletchingType.String_Bow && finishedBows > 1 && bankOpen() -> depositFinishedBows()
+            bowstring == 0 && !bankOpen() -> useBank()
+            config.style() == BowFletcherConfig.BowStyle.Longbow && finishedLongbows == 0 && longbows == 0 && bankOpen() && !Dialog.isEnterInputOpen() -> { withdrawBows().also { withdrawBowstring()} }
+            config.style() == BowFletcherConfig.BowStyle.Shortbow && finishedLongbows == 0 && shortbows == 0 && bankOpen() && !Dialog.isEnterInputOpen() -> { withdrawBows().also { withdrawBowstring()} }
+            Dialog.isEnterInputOpen() -> Keyboard.type("14", true)
+            config.style() == BowFletcherConfig.BowStyle.Longbow && bowstring > 1 && longbows > 1 && bankOpen() -> closeBank()
+            config.style() == BowFletcherConfig.BowStyle.Shortbow && bowstring > 1 && shortbows > 1 && bankOpen() -> closeBank()
+            Dialog.canLevelUpContinue() -> stringBow()
+            config.style() == BowFletcherConfig.BowStyle.Longbow && longbows == 14 && !bankOpen() && bowstring == 14 -> stringBow().also { tickTimer = 3 }
+            config.style() == BowFletcherConfig.BowStyle.Shortbow && shortbows == 14 && !bankOpen() && bowstring == 14 -> stringBow().also { tickTimer = 3 }
+            config.style() == BowFletcherConfig.BowStyle.Longbow && finishedLongbows > 1 && bankOpen() -> depositFinishedBows()
+            config.style() == BowFletcherConfig.BowStyle.Shortbow && finishedShortbows > 1 && bankOpen() -> depositFinishedBows()
             else -> return
         }
+
     }
 
     override fun onWidgetLoaded(it: WidgetLoaded) {
@@ -83,14 +101,19 @@ class BowFletcher : Plugin()   {
         }
     }
     private fun withdrawLogs() {
-        Items.getFirst(config.longbows().logID, container = InventoryID.BANK)?.let {
+        Items.getFirst(config.bows().logID, container = InventoryID.BANK)?.let {
             Items.withdraw(it, 27)
         }
     }
     private fun withdrawBows() {
-        Items.getFirst(config.longbows().bowID, container = InventoryID.BANK)?.let {
-            Items.withdraw(it, 14)
+        if (config.style() == BowFletcherConfig.BowStyle.Longbow)
+            Items.getFirst(config.bows().longbowID, container = InventoryID.BANK)?.let {
+                Items.withdraw(it, 14)
         }
+        if (config.style() == BowFletcherConfig.BowStyle.Shortbow)
+            Items.getFirst(config.bows().shortbowID, container = InventoryID.BANK)?.let {
+                Items.withdraw(it, 14)
+            }
     }
     fun withdrawBowstring() {
         Items.getFirst(ItemID.BOW_STRING, container = InventoryID.BANK)?.let {
@@ -98,26 +121,42 @@ class BowFletcher : Plugin()   {
         }
     }
     fun stringBow(){
-        Items.getFirst(ItemID.BOW_STRING)?.useOn(Items.getFirst(config.longbows().bowID)!!)
+        if (config.style() == BowFletcherConfig.BowStyle.Longbow)
+            Items.getFirst(ItemID.BOW_STRING)?.useOn(Items.getFirst(config.bows().longbowID)!!)
+        if (config.style() == BowFletcherConfig.BowStyle.Shortbow)
+            Items.getFirst(ItemID.BOW_STRING)?.useOn(Items.getFirst(config.bows().shortbowID)!!)
     }
     fun fletchLog() {
-        Items.getFirst(ItemID.KNIFE)?.useOn(Items.getFirst(config.longbows().logID)!!)
+        Items.getFirst(ItemID.KNIFE)?.useOn(Items.getFirst(config.bows().logID)!!)
     }
     fun useBank() {
-        objects.getFirst("Bank chest")?.interact("Use")
-        objects.getFirst("Bank booth")?.interact("Bank")
+        if (!Bank.bankPinIsOpen()) {
+            objects.getFirst("Bank chest")?.interact("Use")
+            objects.getFirst("Bank booth")?.interact("Bank")
+            objects.getFirst("Grand Exchange booth")?.interact("Bank")
+        }
     }
     private fun bankOpen(): Boolean {
         return client.getItemContainer(InventoryID.BANK) != null
     }
     fun depositBows() {
-        Items.getFirst(config.longbows().bowID)?.let {
-            Items.deposit(it, 27)
+        if (config.style() == BowFletcherConfig.BowStyle.Longbow)
+            Items.getFirst(config.bows().longbowID)?.let {
+                Items.deposit(it, 27)
         }
+        if (config.style() == BowFletcherConfig.BowStyle.Shortbow)
+            Items.getFirst(config.bows().shortbowID)?.let {
+                Items.deposit(it, 27)
+            }
     }
         fun depositFinishedBows() {
-            Items.getFirst(config.longbows().finishedBowID)?.let {
-                Items.deposit(it, 14)
+            if (config.style() == BowFletcherConfig.BowStyle.Longbow)
+                Items.getFirst(config.bows().finishedLongbowID)?.let {
+                    Items.deposit(it, 14)
             }
+            if (config.style() == BowFletcherConfig.BowStyle.Shortbow)
+                Items.getFirst(config.bows().finishedShortbowID)?.let {
+                    Items.deposit(it, 14)
+                }
         }
 }
